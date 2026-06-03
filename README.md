@@ -83,7 +83,9 @@ Tests run without any external dependencies — each test spins up in-process `W
 | Integration | Full Gateway → Account Service request flow |
 | Health checks | Both services report `healthy` with database connectivity |
 
-## Example Request
+## Manual Testing
+
+### Step 1 — Submit an event
 
 ```bash
 curl -X POST http://localhost:5000/events \
@@ -98,6 +100,93 @@ curl -X POST http://localhost:5000/events \
     "eventTimestamp": "2026-05-15T14:02:11Z",
     "metadata": { "source": "mainframe-batch", "batchId": "B-9042" }
   }'
+```
+
+Expected: `201 Created` with the event payload. Check the response header `X-Trace-Id` echoes back `my-trace-001`.
+
+### Step 2 — Test idempotency
+
+Send the exact same request again:
+
+```bash
+curl -X POST http://localhost:5000/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt-001",
+    "accountId": "acct-123",
+    "type": "CREDIT",
+    "amount": 150.00,
+    "currency": "USD",
+    "eventTimestamp": "2026-05-15T14:02:11Z"
+  }'
+```
+
+Expected: `200 OK` (not 201) with the original event — no duplicate created.
+
+### Step 3 — Submit an out-of-order event
+
+```bash
+curl -X POST http://localhost:5000/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt-000",
+    "accountId": "acct-123",
+    "type": "DEBIT",
+    "amount": 50.00,
+    "currency": "USD",
+    "eventTimestamp": "2026-05-14T09:00:00Z"
+  }'
+```
+
+### Step 4 — List events (ordered by timestamp)
+
+```bash
+curl http://localhost:5000/events?account=acct-123
+```
+
+Expected: `evt-000` (May 14) appears before `evt-001` (May 15) regardless of submission order.
+
+### Step 5 — Get event by ID
+
+```bash
+curl http://localhost:5000/events/evt-001
+```
+
+### Step 6 — Check account balance
+
+```bash
+curl http://localhost:5001/accounts/acct-123/balance
+```
+
+Expected: `balance: 100.00` (150 CREDIT − 50 DEBIT).
+
+### Step 7 — Test graceful degradation
+
+Stop the Account Service, then verify GET endpoints still work:
+
+```bash
+# These should still return 200
+curl http://localhost:5000/events/evt-001
+curl "http://localhost:5000/events?account=acct-123"
+
+# This should return 503
+curl -X POST http://localhost:5000/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt-999",
+    "accountId": "acct-123",
+    "type": "CREDIT",
+    "amount": 10.00,
+    "currency": "USD",
+    "eventTimestamp": "2026-05-16T10:00:00Z"
+  }'
+```
+
+### Step 8 — Health checks
+
+```bash
+curl http://localhost:5000/health
+curl http://localhost:5001/health
 ```
 
 ## Resiliency Pattern: Circuit Breaker + Retry with Backoff
