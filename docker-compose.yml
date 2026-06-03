@@ -1,0 +1,44 @@
+services:
+  account-service:
+    build:
+      context: .
+      dockerfile: AccountService/Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_URLS=http://+:5001
+      - DatabasePath=/data/account-service.db
+    volumes:
+      - account-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  event-gateway:
+    build:
+      context: .
+      dockerfile: EventGateway/Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      - DatabasePath=/data/event-gateway.db
+      - AccountService__BaseUrl=http://account-service:5001/
+    volumes:
+      - gateway-data:/data
+    depends_on:
+      account-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  account-data:
+  gateway-data:

@@ -1,0 +1,20 @@
+## .NET / C# gitignore
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.db
+*.db-shm
+*.db-wal
+
+# Build outputs
+publish/
+out/
+
+# dotnet tool manifest
+.config/
+
+# OS
+.DS_Store
+Thumbs.db
