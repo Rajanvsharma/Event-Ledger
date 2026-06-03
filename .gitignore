@@ -15,6 +15,12 @@ out/
 # dotnet tool manifest
 .config/
 
+# Test results / coverage
+TestResults/
+
+# Claude session data
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
